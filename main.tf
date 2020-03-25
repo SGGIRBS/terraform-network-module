@@ -1,6 +1,7 @@
-# Azure network configuration. NSG rules are not yet included.
+# Network configuration for spoke vnets in a hub and spoke architecture. 
+# https://docs.microsoft.com/en-us/azure/architecture/reference-architectures/hybrid-networking/hub-spoke
 
-# resource for reference
+# Random resource for reference
 
 resource "random_id" "randomId" {
     byte_length = 8
@@ -20,16 +21,16 @@ resource "azurerm_virtual_network" "vnet" {
   name                = "${var.context_short_name}Services-${var.environment_short_name}-VNET"
   location            = var.location
   resource_group_name = azurerm_resource_group.rg.name
-  address_space       = ["${var.vnet_address_space}"]
+  address_space       = [var.vnet_address_space]
   dns_servers         = var.dns_servers
   tags = var.tags
 }
 
-# Create NSGs (based on subnets)
+# Create NSGs
 
 resource "azurerm_network_security_group" "nsgs" {
   for_each            = var.subnets
-  name                = "${var.context_short_name}-${each.key}-NSG"
+  name                = "${var.context_short_name}-${each.key}-${var.environment_short_name}-NSG"
   location            = var.location
   resource_group_name = azurerm_resource_group.rg.name
   tags = var.tags
@@ -43,11 +44,60 @@ resource "azurerm_subnet" "subnets" {
   resource_group_name  = azurerm_resource_group.rg.name
   virtual_network_name = azurerm_virtual_network.vnet.name
   address_prefix       = each.value
-  network_security_group_id = azurerm_network_security_group.nsgs[each.key].id
-  route_table_id       = each.key != var.route_table_exclusion ? azurerm_route_table.default.id: ""
   service_endpoints    = each.key != var.route_table_exclusion ? [] : ["Microsoft.Sql"]
 }
 
+# Create baseline security rules
+
+resource "azurerm_network_security_rule" "allowmanagement" {
+  for_each                    = var.subnets
+  name                        = "AllowManagementInBound"
+  priority                    = 4094
+  direction                   = "inbound"
+  access                      = "Allow"
+  protocol                    = "TCP"
+  source_port_range           = "*"
+  destination_port_ranges     = [
+    "3389",
+    "22",
+    "5985",
+    "5986",
+  ]
+  source_address_prefix       = "VirtualNetwork"
+  destination_address_prefix  = "VirtualNetwork"
+  resource_group_name         = azurerm_resource_group.rg.name
+  network_security_group_name = azurerm_network_security_group.nsgs[each.key].name
+}
+
+resource "azurerm_network_security_rule" "allowloadbalancer" {
+  for_each                    = var.subnets
+  name                        = "AllowAzureLoadBalancerInBound"
+  priority                    = 4095
+  direction                   = "inbound"
+  access                      = "Allow"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "AzureLoadBalancer"
+  destination_address_prefix  = "*"
+  resource_group_name         = azurerm_resource_group.rg.name
+  network_security_group_name = azurerm_network_security_group.nsgs[each.key].name
+}
+
+resource "azurerm_network_security_rule" "denyinbound" {
+  for_each                    = var.subnets
+  name                        = "DenyAllInBound"
+  priority                    = 4096
+  direction                   = "inbound"
+  access                      = "Deny"
+  protocol                    = "*"
+  source_port_range           = "*"
+  destination_port_range      = "*"
+  source_address_prefix       = "*"
+  destination_address_prefix  = "*"
+  resource_group_name         = azurerm_resource_group.rg.name
+  network_security_group_name = azurerm_network_security_group.nsgs[each.key].name
+}
 
 # Associated NSGs to Subnets
 
@@ -60,10 +110,10 @@ resource "azurerm_subnet_network_security_group_association" "assocnsg" {
 # Create Route Tables.
 
 resource "azurerm_route_table" "default" {
-  name                          = "Default-RT"
+  name                          = "${var.context_short_name}-Default-${var.environment_short_name}-RT"
   location                      = azurerm_resource_group.rg.location
   resource_group_name           = azurerm_resource_group.rg.name
-  disable_bgp_route_propagation = false
+  disable_bgp_route_propagation = true
 
   dynamic "route" {
   for_each       = var.routes
