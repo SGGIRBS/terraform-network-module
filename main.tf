@@ -44,7 +44,6 @@ resource "azurerm_subnet" "subnets" {
   resource_group_name  = azurerm_resource_group.rg.name
   virtual_network_name = azurerm_virtual_network.vnet.name
   address_prefix       = each.value
-  service_endpoints    = each.key != var.route_table_exclusion ? [] : ["Microsoft.Sql"]
 }
 
 # Create baseline security rules
