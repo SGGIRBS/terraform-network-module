@@ -62,4 +62,5 @@ variable "dns_servers" {
 }
 variable "route_table_exclusion" {
   description = "Will not add a route table to these subnets"
+  default = ""
 }
