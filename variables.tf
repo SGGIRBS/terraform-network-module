@@ -37,7 +37,6 @@ variable "routes" {
   description = "Define the routes to create in a map. Key = route name and Value = address prefix"
   default = {
     "DefaultAF"     = "0.0.0.0/0"
-    "HubProdVNET"   = "10.220.0.0/21"
   }
 }
 variable "next_hop_ip" {
@@ -50,14 +49,6 @@ variable "dns_servers" {
   default     = [
     "10.220.2.4",
     "10.220.2.5",
-    "10.220.2.6",
-    "10.220.2.7",
-    "10.220.2.8",
-    "10.220.2.9",
-    "10.220.2.10",
-    "10.220.2.11",
-    "10.201.64.110",
-    "168.63.129.16",
   ]
 }
 variable "route_table_exclusion" {
